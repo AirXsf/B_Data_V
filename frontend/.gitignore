@@ -1,0 +1,25 @@
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### npm ###
+dist
+node_modules
+
+### VS Code ###
+.vscode/
+
+
+### nuxtjs ###
+.nuxt
+
+### MAC OS ###
+.DS_Store
+static/video/home.m4v
+pages/pc/document/index copy.vue
+
+.env
+.env.*
+
