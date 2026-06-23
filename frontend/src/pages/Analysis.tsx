@@ -88,7 +88,7 @@ export const Analysis = () => {
       const ak = meta.VITE_DOUBAO_AK || '';
       const sk = meta.VITE_DOUBAO_SK || '';
       const apiKey = meta.VITE_DOUBAO_API_KEY || '';
-      const model = meta.VITE_DOUBAO_MODEL || 'doubao-1-5-pro-32k-250115';
+      const model = meta.VITE_DOUBAO_MODEL || '';
       // 数一下有多少个 VITE_ 开头的变量（不打印具体值）
       const viteCount = Object.keys(meta).filter((k) => k.startsWith('VITE_')).length;
       return { ak, sk, apiKey, model, viteCount };
@@ -185,69 +185,16 @@ export const Analysis = () => {
 
   // 🔑 环境变量诊断卡片（始终显示）
   const renderConfigStatus = () => {
-    const isApiKeyConfigured = envVars.apiKey.length >= 8;
-    const isAkSkConfigured = envVars.ak.length >= 8 && envVars.sk.length >= 8;
-    const isConfigured = isApiKeyConfigured || isAkSkConfigured;
-
     return (
-      <div className={`rounded-xl p-4 mb-6 border ${isConfigured ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
-        <div className="flex items-start gap-3">
-          <Key className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isConfigured ? 'text-blue-600' : 'text-red-600'}`} />
-          <div className="flex-1 text-sm">
-            <div className={`font-semibold mb-2 ${isConfigured ? 'text-blue-800' : 'text-red-800'}`}>
-              {isConfigured
-                ? '✅ 环境变量已被 Vite 正确读取'
-                : '❌ 环境变量未被读取或未配置'}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <span className={`inline-block w-3 h-3 rounded-full ${isApiKeyConfigured ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                <span className="font-mono text-gray-700 text-xs">VITE_DOUBAO_API_KEY: </span>
-                <span className="text-gray-600 text-xs font-mono">
-                  {isApiKeyConfigured ? envVars.apiKey.slice(0, 8) + '...' + envVars.apiKey.slice(-4) + ` (长度 ${envVars.apiKey.length})` : '未配置'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`inline-block w-3 h-3 rounded-full ${envVars.ak.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                <span className="font-mono text-gray-700 text-xs">VITE_DOUBAO_AK: </span>
-                <span className="text-gray-600 text-xs font-mono">
-                  {envVars.ak.length >= 8 ? envVars.ak.slice(0, 8) + '...' + envVars.ak.slice(-4) + ` (长度 ${envVars.ak.length})` : '未配置'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`inline-block w-3 h-3 rounded-full ${envVars.sk.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                <span className="font-mono text-gray-700 text-xs">VITE_DOUBAO_SK: </span>
-                <span className="text-gray-600 text-xs font-mono">
-                  {envVars.sk.length >= 8 ? envVars.sk.slice(0, 8) + '...' + envVars.sk.slice(-4) + ` (长度 ${envVars.sk.length})` : '未配置'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
-                <span className="font-mono text-gray-700 text-xs">VITE_DOUBAO_MODEL: </span>
-                <span className="text-gray-600 text-xs font-mono">{envVars.model}</span>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-3 text-xs text-gray-700 border border-gray-200">
-              <div className="font-semibold mb-1 text-gray-800">💡 配置说明：</div>
-              <ul className="space-y-1 list-disc list-inside">
-                <li><strong>方式一（推荐，纯前端首选）</strong>：配置 <code className="bg-gray-100 px-1 rounded">VITE_DOUBAO_API_KEY</code></li>
-                <li><strong>方式二（备用）</strong>：配置 <code className="bg-gray-100 px-1 rounded">VITE_DOUBAO_AK</code> 和 <code className="bg-gray-100 px-1 rounded">VITE_DOUBAO_SK</code></li>
-                <li>只要其中<strong>任何一种方式</strong>能成功调用就行，不需要全配</li>
-              </ul>
-              {!isConfigured ? (
-                <div className="mt-2 pt-2 border-t border-gray-200 text-red-700 font-semibold">
-                  ⚠️ 未检测到有效的密钥配置！请按以下步骤操作：
-                  <ol className="mt-1 list-decimal list-inside font-normal space-y-0.5">
-                    <li>确认 <code className="bg-gray-100 px-1 rounded">.env</code> 文件在项目根目录（和 <code className="bg-gray-100 px-1 rounded">package.json</code> 同一层）</li>
-                    <li>在文件中配置 <code className="bg-gray-100 px-1 rounded">VITE_DOUBAO_API_KEY=你的密钥</code></li>
-                    <li><strong>必须 Ctrl+C 停止开发服务器，再重新运行 <code className="bg-gray-100 px-1 rounded">npm run dev</code></strong></li>
-                    <li>然后刷新浏览器页面</li>
-                  </ol>
-                </div>
-              ) : null}
-            </div>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+          <ShieldCheck className="w-5 h-5 mr-2 text-green-600" />
+          系统配置状态
+        </h3>
+        
+        <div className="space-y-4">
+          <div className="p-4 bg-gray-50 rounded-xl">
+            <p className="text-sm text-gray-600 mb-2">已接入独立后端服务进行 AI 调用，无需在前端配置大模型密钥。</p>
           </div>
         </div>
       </div>
