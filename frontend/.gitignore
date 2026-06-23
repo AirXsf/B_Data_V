@@ -5,7 +5,7 @@
 *.ipr
 
 ### npm ###
-dist
+# dist
 node_modules
 
 ### VS Code ###
