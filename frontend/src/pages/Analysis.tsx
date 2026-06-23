@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useInventoryStore } from '@/store/inventoryStore';
-import { FileText, Brain, TrendingUp, AlertTriangle, Sparkles, BarChart3, Loader2, ShieldCheck, Key } from 'lucide-react';
+import { FileText, Brain, TrendingUp, AlertTriangle, Sparkles, BarChart3, Loader2, ShieldCheck } from 'lucide-react';
 import { generateAnalysisReport } from '@/services/aiService';
 
 export const Analysis = () => {
@@ -80,22 +80,6 @@ export const Analysis = () => {
     flushList();
     return elements;
   };
-
-  // 直接从 import.meta.env 读取当前环境变量值（用于页面显示诊断）
-  const envVars = (() => {
-    try {
-      const meta = (import.meta as unknown as { env?: Record<string, string> }).env || {};
-      const ak = meta.VITE_DOUBAO_AK || '';
-      const sk = meta.VITE_DOUBAO_SK || '';
-      const apiKey = meta.VITE_DOUBAO_API_KEY || '';
-      const model = meta.VITE_DOUBAO_MODEL || '';
-      // 数一下有多少个 VITE_ 开头的变量（不打印具体值）
-      const viteCount = Object.keys(meta).filter((k) => k.startsWith('VITE_')).length;
-      return { ak, sk, apiKey, model, viteCount };
-    } catch {
-      return { ak: '', sk: '', apiKey: '', model: 'doubao-1-5-pro-32k-250115', viteCount: 0 };
-    }
-  })();
 
   const totalIn = inventoryData.filter((d) => d.type === 'in').reduce((s, d) => s + d.amount, 0);
   const totalOut = inventoryData.filter((d) => d.type === 'out').reduce((s, d) => s + d.amount, 0);
