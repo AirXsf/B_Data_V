@@ -7,7 +7,6 @@ import io
 import os
 import json
 import httpx
-from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,19 +28,51 @@ def safe_number(val):
     except:
         return 0.0
 
+def safe_text(val, default=""):
+    if pd.isnull(val):
+        return default
+    text = str(val).strip()
+    return text if text else default
+
+def normalize_header(text):
+    return str(text).strip().replace(" ", "").replace("\n", "").replace("\r", "")
+
+def find_column(columns, exact_aliases=None, contains_aliases=None):
+    exact_aliases = exact_aliases or []
+    contains_aliases = contains_aliases or []
+    normalized_columns = [(col, normalize_header(col)) for col in columns]
+
+    for alias in exact_aliases:
+        normalized_alias = normalize_header(alias)
+        for original, normalized in normalized_columns:
+            if normalized == normalized_alias:
+                return original
+
+    for alias in contains_aliases:
+        normalized_alias = normalize_header(alias)
+        for original, normalized in normalized_columns:
+            if normalized_alias and normalized_alias in normalized:
+                return original
+
+    return None
+
 def parse_date(val):
     if pd.isnull(val):
         return None
     
-    # Check if the value is a string that looks like a pure number (e.g. "202503")
+    # Check if the value is a string that looks like a pure number (e.g. "202503" or "2025010")
     s = str(val).strip()
-    # Handle normal format like 202501 (YYYYMM)
     if s.isdigit():
-        if len(s) == 6:
-            return f"{s[:4]}-{s[4:]}"
-        # If it's a weird format like 2025010, treat it as dirty data and filter it out
-        else:
-            return None
+        if len(s) >= 5:
+            year = s[:4]
+            month_part = s[4:]
+            try:
+                month = int(month_part)
+                if 1 <= month <= 12:
+                    return f"{year}-{str(month).zfill(2)}"
+            except:
+                pass
+        return None
         
     # Handle normal dates using pandas
     try:
@@ -94,61 +125,71 @@ async def upload_file(file: UploadFile = File(...)):
 
         # Standardize columns for IN
         df_in.columns = [str(c).strip() for c in df_in.columns]
-        in_date_col = next((c for c in df_in.columns if any(x in c for x in ['日期', '单据', 'date'])), None)
-        in_code_col = next((c for c in df_in.columns if any(x in c for x in ['存货编码', '物料编码', '编码', 'code'])), None)
-        in_name_col = next((c for c in df_in.columns if any(x in c for x in ['存货名称', '物料名称', '名称', 'material'])), None)
-        in_qty_col = next((c for c in df_in.columns if any(x in c for x in ['数量', '入库数量', 'qty'])), None)
-        in_amt_col = next((c for c in df_in.columns if any(x in c for x in ['金额', '本币无税金额', '总价', 'amount'])), None)
-        in_cat_col = next((c for c in df_in.columns if any(x in c for x in ['入库类别', '类别', 'category'])), None)
-        in_dept_col = next((c for c in df_in.columns if any(x in c for x in ['需求部门', '部门', 'department'])), None)
-        in_proj_col = next((c for c in df_in.columns if any(x in c for x in ['需求项目', '项目', 'project'])), None)
+        in_date_col = find_column(df_in.columns, ['入库日期', '日期'], ['date'])
+        in_code_col = find_column(df_in.columns, ['存货编码', '物料编码', '材料编码', '编码'], ['code'])
+        in_name_col = find_column(df_in.columns, ['存货名称', '物料名称', '材料名称'], ['material'])
+        in_qty_col = find_column(df_in.columns, ['入库数量', '数量'], ['qty'])
+        in_amt_col = find_column(df_in.columns, ['本币无税金额', '入库金额', '金额'], ['amount', '总价'])
+        in_cat_col = find_column(df_in.columns, ['入库类别'], ['category'])
+        in_dept_col = find_column(df_in.columns, ['需求部门', '部门'], ['department'])
+        in_proj_col = find_column(df_in.columns, ['需求项目', '项目'], ['project'])
         
         inbound = []
         if in_qty_col and in_amt_col and in_code_col:
             for _, row in df_in.iterrows():
                 qty = safe_number(row.get(in_qty_col))
-                if qty <= 0: continue
+                amount = safe_number(row.get(in_amt_col))
+                if qty == 0 and amount == 0:
+                    continue
                 d_str = parse_date(row.get(in_date_col)) if in_date_col else None
                 if not d_str: continue # Skip rows without valid date
+                material_code = safe_text(row.get(in_code_col))
+                if not material_code:
+                    continue
                 inbound.append({
                     "date": d_str,
-                    "materialCode": str(row.get(in_code_col)),
-                    "materialName": str(row.get(in_name_col)) if in_name_col else "",
-                    "category": str(row.get(in_cat_col, "其他")),
-                    "department": str(row.get(in_dept_col, "未分配")),
-                    "project": str(row.get(in_proj_col, "未分配")),
+                    "materialCode": material_code,
+                    "materialName": safe_text(row.get(in_name_col)),
+                    "category": safe_text(row.get(in_cat_col), "其他"),
+                    "department": safe_text(row.get(in_dept_col), "未分配"),
+                    "project": safe_text(row.get(in_proj_col), "未分配"),
                     "quantity": qty,
-                    "amount": safe_number(row.get(in_amt_col)),
+                    "amount": amount,
                     "type": "in"
                 })
 
         # Standardize columns for OUT
         df_out.columns = [str(c).strip() for c in df_out.columns]
-        out_date_col = next((c for c in df_out.columns if any(x in c for x in ['日期', '单据', 'date'])), None)
-        out_code_col = next((c for c in df_out.columns if any(x in c for x in ['存货编码', '物料编码', '编码', 'code'])), None)
-        out_name_col = next((c for c in df_out.columns if any(x in c for x in ['存货名称', '物料名称', '名称', 'material'])), None)
-        out_qty_col = next((c for c in df_out.columns if any(x in c for x in ['数量', '出库数量', 'qty'])), None)
-        out_amt_col = next((c for c in df_out.columns if any(x in c for x in ['金额', '本币无税金额', '总价', 'amount'])), None)
-        out_cat_col = next((c for c in df_out.columns if any(x in c for x in ['出库类别', '类别', 'category'])), None)
-        out_dept_col = next((c for c in df_out.columns if any(x in c for x in ['需求部门', '部门', 'department'])), None)
-        out_proj_col = next((c for c in df_out.columns if any(x in c for x in ['需求项目', '项目', 'project'])), None)
+        out_date_col = find_column(df_out.columns, ['出库日期', '日期'], ['date'])
+        out_code_col = find_column(df_out.columns, ['材料编码', '存货编码', '物料编码', '编码'], ['code'])
+        out_name_col = find_column(df_out.columns, ['存货名称', '物料名称', '材料名称'], ['material'])
+        out_qty_col = find_column(df_out.columns, ['出库数量', '数量'], ['qty'])
+        out_amt_col = find_column(df_out.columns, ['本币无税金额', '出库金额', '金额'], ['amount', '总价'])
+        out_cat_col = find_column(df_out.columns, ['出库类别'], ['category'])
+        out_dept_col = find_column(df_out.columns, ['需求部门', '部门'], ['department'])
+        out_proj_col = find_column(df_out.columns, ['需求项目', '项目'], ['project'])
         
         outbound = []
         if out_qty_col and out_amt_col and out_code_col:
             for _, row in df_out.iterrows():
                 qty = safe_number(row.get(out_qty_col))
-                if qty <= 0: continue
+                amount = safe_number(row.get(out_amt_col))
+                if qty == 0 and amount == 0:
+                    continue
                 d_str = parse_date(row.get(out_date_col)) if out_date_col else None
                 if not d_str: continue # Skip rows without valid date
+                material_code = safe_text(row.get(out_code_col))
+                if not material_code:
+                    continue
                 outbound.append({
                     "date": d_str,
-                    "materialCode": str(row.get(out_code_col)),
-                    "materialName": str(row.get(out_name_col)) if out_name_col else "",
-                    "category": str(row.get(out_cat_col, "其他")),
-                    "department": str(row.get(out_dept_col, "未分配")),
-                    "project": str(row.get(out_proj_col, "未分配")),
+                    "materialCode": material_code,
+                    "materialName": safe_text(row.get(out_name_col)),
+                    "category": safe_text(row.get(out_cat_col), "其他"),
+                    "department": safe_text(row.get(out_dept_col), "未分配"),
+                    "project": safe_text(row.get(out_proj_col), "未分配"),
                     "quantity": qty,
-                    "amount": safe_number(row.get(out_amt_col)),
+                    "amount": amount,
                     "type": "out"
                 })
 
@@ -426,8 +467,6 @@ async def analyze_data(data: dict):
 
     # 默认使用 OpenAI 官方地址，如果是豆包则使用配置的火山引擎地址
     api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
-    url = f"{api_base.rstrip('/')}/chat/completions"
-
     # Build prompt
     prompt = f"""
     你是一位专业的企业存货管理分析专家，请基于以下存货管理数据，生成一份中文分析报告。
@@ -481,4 +520,3 @@ async def analyze_data(data: dict):
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no" # Disable buffering in Nginx/proxies
     })
-
