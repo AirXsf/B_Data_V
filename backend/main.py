@@ -267,6 +267,7 @@ async def upload_file(file: UploadFile = File(...)):
         in_date_col = choose_best_column(df_in, ['入库日期', '日期'], ['date'], looks_like_date_text)
         in_code_col = choose_best_column(df_in, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
         in_name_col = choose_best_column(df_in, ['存货名称', '物料名称', '材料名称'], ['material'], looks_like_material_name)
+        in_no_col = choose_best_column(df_in, ['入库单号', '单号'], ['单号', '编号', 'bill', 'no'], lambda text: bool(safe_text(text)))
         in_qty_col = choose_best_column(df_in, ['入库数量', '数量'], ['qty'], lambda text: safe_number(text) != 0)
         in_amt_col = choose_best_column(df_in, ['本币无税金额', '入库金额', '金额'], ['amount', '总价'], lambda text: safe_number(text) != 0)
         in_cat_col = choose_best_column(df_in, ['入库类别'], ['category'], is_inbound_category_value)
@@ -289,6 +290,7 @@ async def upload_file(file: UploadFile = File(...)):
                     "date": d_str,
                     "materialCode": material_code,
                     "materialName": read_text_field(row, in_name_col, "", material_code),
+                    "inboundNo": read_text_field(row, in_no_col, "", ""),
                     "category": safe_text(row.get(in_cat_col), "其他"),
                     "department": read_text_field(row, in_dept_col, "", "未分配"),
                     "project": read_text_field(row, in_proj_col, "", "未分配"),
@@ -409,9 +411,21 @@ async def upload_file(file: UploadFile = File(...)):
 
         # 3. Top Materials (IN)
         if not df_inbound.empty:
-            top_mats = df_inbound.groupby(["materialCode", "materialName"])["amount"].sum().reset_index()
+            top_source = df_inbound.copy()
+            if "inboundNo" not in top_source.columns:
+                top_source["inboundNo"] = ""
+            top_mats = top_source.groupby(["materialCode", "materialName"], as_index=False).agg({
+                "amount": "sum",
+                "inboundNo": "first"
+            })
             top_mats = top_mats.sort_values(by="amount", ascending=False).head(10)
-            top_materials = [{"materialCode": r["materialCode"], "materialName": r["materialName"], "amount": r["amount"], "rank": i+1} for i, r in top_mats.iterrows()]
+            top_materials = [{
+                "materialCode": r["materialCode"],
+                "materialName": r["materialName"],
+                "inboundNo": safe_text(r.get("inboundNo")),
+                "amount": r["amount"],
+                "rank": rank
+            } for rank, (_, r) in enumerate(top_mats.iterrows(), start=1)]
         else:
             top_materials = []
 

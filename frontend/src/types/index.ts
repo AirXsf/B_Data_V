@@ -31,6 +31,7 @@ export interface CategoryComposition {
 export interface MaterialRanking {
   materialCode: string;
   materialName: string;
+  inboundNo?: string;
   amount: number;
   rank: number;
 }

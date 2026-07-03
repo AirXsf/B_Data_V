@@ -127,20 +127,20 @@ export const Dashboard = () => {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="py-3 px-4 text-left font-medium text-gray-600">排名</th>
                 <th className="py-3 px-4 text-left font-medium text-gray-600">物料编码</th>
-                <th className="py-3 px-4 text-left font-medium text-gray-600">物料名称</th>
+                <th className="py-3 px-4 text-left font-medium text-gray-600">入库单号</th>
                 <th className="py-3 px-4 text-right font-medium text-gray-600">入库金额</th>
               </tr>
             </thead>
             <tbody>
-              {(analyticsResult?.topMaterials || []).map((m) => (
-                <tr key={m.materialCode} className="border-b border-gray-50 hover:bg-gray-50">
+              {(analyticsResult?.topMaterials || []).map((m, index) => (
+                <tr key={`${m.materialCode}-${index}`} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="py-2 px-4">
                     <span className="inline-flex items-center justify-center w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
-                      {m.rank}
+                      {index + 1}
                     </span>
                   </td>
                   <td className="py-2 px-4 font-mono text-gray-800">{m.materialCode}</td>
-                  <td className="py-2 px-4 text-gray-700">{m.materialName}</td>
+                  <td className="py-2 px-4 text-gray-700">{m.inboundNo || '-'}</td>
                   <td className="py-2 px-4 text-right text-gray-800 font-medium">{Math.round(m.amount).toLocaleString()}</td>
                 </tr>
               ))}
