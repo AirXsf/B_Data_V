@@ -8,6 +8,7 @@ import os
 import json
 import httpx
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 
@@ -34,27 +35,150 @@ def safe_text(val, default=""):
     text = str(val).strip()
     return text if text else default
 
+def read_text_field(row, column, missing_default="", blank_default=""):
+    if not column:
+        return missing_default
+    value = safe_text(row.get(column))
+    return value if value else blank_default
+
 def normalize_header(text):
     return str(text).strip().replace(" ", "").replace("\n", "").replace("\r", "")
 
-def find_column(columns, exact_aliases=None, contains_aliases=None):
+def natural_label_sort_key(text):
+    value = safe_text(text)
+    match = re.search(r'(\d+)$', value)
+    if match:
+        return (value[:match.start()], int(match.group(1)))
+    return (value, float('inf'))
+
+def unique_headers(values):
+    counts = {}
+    headers = []
+    for value in values:
+        base = normalize_header(value) or "unnamed"
+        counts[base] = counts.get(base, 0) + 1
+        if counts[base] == 1:
+            headers.append(base)
+        else:
+            headers.append(f"{base}__{counts[base]}")
+    return headers
+
+def header_alias_score(header, exact_aliases=None, contains_aliases=None):
     exact_aliases = exact_aliases or []
     contains_aliases = contains_aliases or []
-    normalized_columns = [(col, normalize_header(col)) for col in columns]
+    normalized = normalize_header(header)
+    score = 0
 
     for alias in exact_aliases:
-        normalized_alias = normalize_header(alias)
-        for original, normalized in normalized_columns:
-            if normalized == normalized_alias:
-                return original
-
+        if normalized == normalize_header(alias):
+            score += 100
     for alias in contains_aliases:
         normalized_alias = normalize_header(alias)
-        for original, normalized in normalized_columns:
-            if normalized_alias and normalized_alias in normalized:
-                return original
+        if normalized_alias and normalized_alias in normalized:
+            score += 20
+    return score
 
-    return None
+def sample_non_empty(series, limit=12):
+    values = []
+    for value in series:
+        text = safe_text(value)
+        if text:
+            values.append(text)
+        if len(values) >= limit:
+            break
+    return values
+
+def ratio_score(samples, predicate):
+    if not samples:
+        return 0
+    matches = 0
+    for sample in samples:
+        if predicate(sample):
+            matches += 1
+    return int((matches / len(samples)) * 40)
+
+def looks_like_date_text(text):
+    if not text:
+        return False
+    if parse_date(text):
+        return True
+    normalized = text.replace("/", "-").replace(".", "-")
+    try:
+        dt = pd.to_datetime(normalized, errors='coerce')
+        return pd.notnull(dt)
+    except:
+        return False
+
+def looks_like_material_code(text):
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) < 4:
+        return False
+    has_digit = any(ch.isdigit() for ch in stripped)
+    has_alpha = any(ch.isalpha() for ch in stripped)
+    return has_digit and (has_alpha or "-" in stripped)
+
+def is_department_value(text):
+    return any(token in text for token in ["部", "科", "车间", "中心", "仓", "组", "线", "team", "department"])
+
+def is_project_value(text):
+    return any(token in text for token in ["项目", "工程", "课题", "project", "订单"])
+
+def is_inbound_category_value(text):
+    return any(token in text for token in ["入库", "采购", "调拨", "盘盈", "退货", "委外"])
+
+def is_outbound_category_value(text):
+    return any(token in text for token in ["出库", "领用", "消耗", "委外", "借料", "退料"])
+
+def looks_like_material_name(text):
+    if not text:
+        return False
+    if looks_like_material_code(text):
+        return False
+    if any(token in text for token in ["公司", "供应商", "项目", "部门"]):
+        return False
+    return True
+
+def choose_best_column(df, exact_aliases=None, contains_aliases=None, value_checker=None):
+    candidates = []
+    for column in df.columns:
+        samples = sample_non_empty(df[column])
+        score = header_alias_score(column, exact_aliases, contains_aliases)
+        if value_checker:
+            score += ratio_score(samples, value_checker)
+        if score > 0:
+            candidates.append((score, column))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], list(df.columns).index(item[1])))
+    return candidates[0][1]
+
+def detect_header_row(raw_df, required_aliases):
+    best_idx = 0
+    best_score = -1
+    max_scan = min(len(raw_df), 8)
+    for idx in range(max_scan):
+        row_values = [normalize_header(value) for value in raw_df.iloc[idx].tolist()]
+        score = 0
+        for alias_group in required_aliases:
+            if any(normalize_header(alias) in row_values for alias in alias_group):
+                score += 1
+        if score > best_score:
+            best_idx = idx
+            best_score = score
+    return best_idx
+
+def read_sheet_with_detected_header(excel_data, sheet_name, required_aliases):
+    raw_df = pd.read_excel(excel_data, sheet_name=sheet_name, header=None)
+    if raw_df.empty:
+        return raw_df
+    header_row_idx = detect_header_row(raw_df, required_aliases)
+    headers = unique_headers(raw_df.iloc[header_row_idx].tolist())
+    df = raw_df.iloc[header_row_idx + 1:].copy().reset_index(drop=True)
+    df.columns = headers
+    return df
 
 def parse_date(val):
     if pd.isnull(val):
@@ -109,30 +233,45 @@ async def upload_file(file: UploadFile = File(...)):
         out_sheet = next((s for s in sheet_names if any(x in s for x in ['出', '领', 'issue', 'out'])), sheet_names[1] if len(sheet_names)>1 else sheet_names[0])
         stock_sheet = next((s for s in sheet_names if any(x in s for x in ['结存', '库存', 'stock', 'summary', '汇总'])), sheet_names[2] if len(sheet_names)>2 else sheet_names[0])
 
-        df_in = pd.read_excel(excel_data, sheet_name=in_sheet)
-        df_out = pd.read_excel(excel_data, sheet_name=out_sheet)
-        df_stock = pd.read_excel(excel_data, sheet_name=stock_sheet)
+        df_in = read_sheet_with_detected_header(
+            excel_data,
+            in_sheet,
+            [
+                ['入库日期', '日期'],
+                ['存货编码', '物料编码', '材料编码', '编码'],
+                ['本币无税金额', '入库金额', '金额'],
+                ['数量', '入库数量']
+            ]
+        )
+        df_out = read_sheet_with_detected_header(
+            excel_data,
+            out_sheet,
+            [
+                ['出库日期', '日期'],
+                ['材料编码', '存货编码', '物料编码', '编码'],
+                ['金额', '本币无税金额', '出库金额'],
+                ['数量', '出库数量']
+            ]
+        )
+        df_stock = read_sheet_with_detected_header(
+            excel_data,
+            stock_sheet,
+            [
+                ['存货编码', '物料编码', '材料编码', '编码'],
+                ['期初金额'],
+                ['结存金额'],
+                ['基础需求数量', '基础需求']
+            ]
+        )
         
-        # If stock sheet has a title row, the actual headers might be in row 0
-        if 'Unnamed: 1' in df_stock.columns or 'Unnamed: 2' in df_stock.columns:
-            # Let's try to find the row that contains '存货编码' or '期初'
-            for idx, row in df_stock.head(5).iterrows():
-                row_strs = [str(x) for x in row.values]
-                if any('编码' in x for x in row_strs) or any('期初' in x for x in row_strs):
-                    df_stock.columns = row.values
-                    df_stock = df_stock.iloc[idx+1:].reset_index(drop=True)
-                    break
-
-        # Standardize columns for IN
-        df_in.columns = [str(c).strip() for c in df_in.columns]
-        in_date_col = find_column(df_in.columns, ['入库日期', '日期'], ['date'])
-        in_code_col = find_column(df_in.columns, ['存货编码', '物料编码', '材料编码', '编码'], ['code'])
-        in_name_col = find_column(df_in.columns, ['存货名称', '物料名称', '材料名称'], ['material'])
-        in_qty_col = find_column(df_in.columns, ['入库数量', '数量'], ['qty'])
-        in_amt_col = find_column(df_in.columns, ['本币无税金额', '入库金额', '金额'], ['amount', '总价'])
-        in_cat_col = find_column(df_in.columns, ['入库类别'], ['category'])
-        in_dept_col = find_column(df_in.columns, ['需求部门', '部门'], ['department'])
-        in_proj_col = find_column(df_in.columns, ['需求项目', '项目'], ['project'])
+        in_date_col = choose_best_column(df_in, ['入库日期', '日期'], ['date'], looks_like_date_text)
+        in_code_col = choose_best_column(df_in, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
+        in_name_col = choose_best_column(df_in, ['存货名称', '物料名称', '材料名称'], ['material'], looks_like_material_name)
+        in_qty_col = choose_best_column(df_in, ['入库数量', '数量'], ['qty'], lambda text: safe_number(text) != 0)
+        in_amt_col = choose_best_column(df_in, ['本币无税金额', '入库金额', '金额'], ['amount', '总价'], lambda text: safe_number(text) != 0)
+        in_cat_col = choose_best_column(df_in, ['入库类别'], ['category'], is_inbound_category_value)
+        in_dept_col = choose_best_column(df_in, ['需求部门', '部门'], ['department'], is_department_value)
+        in_proj_col = choose_best_column(df_in, ['需求项目', '项目'], ['project'], is_project_value)
         
         inbound = []
         if in_qty_col and in_amt_col and in_code_col:
@@ -149,25 +288,24 @@ async def upload_file(file: UploadFile = File(...)):
                 inbound.append({
                     "date": d_str,
                     "materialCode": material_code,
-                    "materialName": safe_text(row.get(in_name_col)),
+                    "materialName": read_text_field(row, in_name_col, "", material_code),
                     "category": safe_text(row.get(in_cat_col), "其他"),
-                    "department": safe_text(row.get(in_dept_col), "未分配"),
-                    "project": safe_text(row.get(in_proj_col), "未分配"),
+                    "department": read_text_field(row, in_dept_col, "", "未分配"),
+                    "project": read_text_field(row, in_proj_col, "", "未分配"),
                     "quantity": qty,
                     "amount": amount,
                     "type": "in"
                 })
 
         # Standardize columns for OUT
-        df_out.columns = [str(c).strip() for c in df_out.columns]
-        out_date_col = find_column(df_out.columns, ['出库日期', '日期'], ['date'])
-        out_code_col = find_column(df_out.columns, ['材料编码', '存货编码', '物料编码', '编码'], ['code'])
-        out_name_col = find_column(df_out.columns, ['存货名称', '物料名称', '材料名称'], ['material'])
-        out_qty_col = find_column(df_out.columns, ['出库数量', '数量'], ['qty'])
-        out_amt_col = find_column(df_out.columns, ['本币无税金额', '出库金额', '金额'], ['amount', '总价'])
-        out_cat_col = find_column(df_out.columns, ['出库类别'], ['category'])
-        out_dept_col = find_column(df_out.columns, ['需求部门', '部门'], ['department'])
-        out_proj_col = find_column(df_out.columns, ['需求项目', '项目'], ['project'])
+        out_date_col = choose_best_column(df_out, ['出库日期', '日期'], ['date'], looks_like_date_text)
+        out_code_col = choose_best_column(df_out, ['材料编码', '存货编码', '物料编码', '编码'], ['code'], looks_like_material_code)
+        out_name_col = choose_best_column(df_out, ['存货名称', '物料名称', '材料名称'], ['material'], looks_like_material_name)
+        out_qty_col = choose_best_column(df_out, ['出库数量', '数量'], ['qty'], lambda text: safe_number(text) != 0)
+        out_amt_col = choose_best_column(df_out, ['本币无税金额', '出库金额', '金额'], ['amount', '总价'], lambda text: safe_number(text) != 0)
+        out_cat_col = choose_best_column(df_out, ['出库类别'], ['category'], is_outbound_category_value)
+        out_dept_col = choose_best_column(df_out, ['需求部门', '部门'], ['department'], is_department_value)
+        out_proj_col = choose_best_column(df_out, ['需求项目', '项目'], ['project'], is_project_value)
         
         outbound = []
         if out_qty_col and out_amt_col and out_code_col:
@@ -184,10 +322,10 @@ async def upload_file(file: UploadFile = File(...)):
                 outbound.append({
                     "date": d_str,
                     "materialCode": material_code,
-                    "materialName": safe_text(row.get(out_name_col)),
+                    "materialName": read_text_field(row, out_name_col, "", material_code),
                     "category": safe_text(row.get(out_cat_col), "其他"),
-                    "department": safe_text(row.get(out_dept_col), "未分配"),
-                    "project": safe_text(row.get(out_proj_col), "未分配"),
+                    "department": read_text_field(row, out_dept_col, "", "未分配"),
+                    "project": read_text_field(row, out_proj_col, "", "未分配"),
                     "quantity": qty,
                     "amount": amount,
                     "type": "out"
@@ -198,13 +336,32 @@ async def upload_file(file: UploadFile = File(...)):
         
         # Get initial balance from df_stock if available
         initial_balance = 0
+        stock_data = []
         if not df_stock.empty:
-            df_stock.columns = [str(c).strip() for c in df_stock.columns]
-            init_amt_col = next((c for c in df_stock.columns if '期初金额' in c), None)
+            init_amt_col = choose_best_column(df_stock, ['期初金额'], ['期初金额'], lambda text: safe_number(text) != 0)
             if init_amt_col:
                 initial_balance = pd.to_numeric(df_stock[init_amt_col], errors='coerce').sum()
                 if pd.isna(initial_balance):
                     initial_balance = 0
+
+            stock_code_col = choose_best_column(df_stock, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
+            stock_name_col = choose_best_column(df_stock, ['存货名称', '物料名称', '材料名称'], ['material'], looks_like_material_name)
+            stock_balance_qty_col = choose_best_column(df_stock, ['结存数量', '库存数量', '数量'], ['quantity'], lambda text: safe_number(text) != 0)
+            stock_balance_amt_col = choose_best_column(df_stock, ['结存金额', '库存金额', '金额'], ['amount'], lambda text: safe_number(text) != 0)
+            stock_base_demand_col = choose_best_column(df_stock, ['基础需求数量', '基础需求'], ['基础需求'], lambda text: safe_number(text) != 0)
+
+            if stock_code_col:
+                for _, row in df_stock.iterrows():
+                    code = safe_text(row.get(stock_code_col))
+                    if not code:
+                        continue
+                    stock_data.append({
+                        "materialCode": code,
+                        "materialName": read_text_field(row, stock_name_col, "", code),
+                        "balanceQuantity": safe_number(row.get(stock_balance_qty_col)) if stock_balance_qty_col else 0,
+                        "balanceAmount": safe_number(row.get(stock_balance_amt_col)) if stock_balance_amt_col else 0,
+                        "baseDemandQuantity": safe_number(row.get(stock_base_demand_col)) if stock_base_demand_col else 0
+                    })
 
         # 1. Trend Data
         trend_map = {}
@@ -234,11 +391,21 @@ async def upload_file(file: UploadFile = File(...)):
         # 2. Category Composition
         in_cat = df_inbound.groupby("category")["amount"].sum().reset_index() if not df_inbound.empty else pd.DataFrame(columns=["category", "amount"])
         in_total = in_cat["amount"].sum()
-        inbound_composition = [{"materialName": r["category"], "amount": r["amount"], "percentage": (r["amount"]/in_total*100) if in_total>0 else 0} for _, r in in_cat.iterrows()]
+        inbound_composition = [{
+            "materialCode": r["category"],
+            "materialName": r["category"],
+            "amount": r["amount"],
+            "percentage": (r["amount"]/in_total*100) if in_total>0 else 0
+        } for _, r in in_cat.iterrows()]
 
         out_cat = df_outbound.groupby("category")["amount"].sum().reset_index() if not df_outbound.empty else pd.DataFrame(columns=["category", "amount"])
         out_total = out_cat["amount"].sum()
-        outbound_composition = [{"materialName": r["category"], "amount": r["amount"], "percentage": (r["amount"]/out_total*100) if out_total>0 else 0} for _, r in out_cat.iterrows()]
+        outbound_composition = [{
+            "materialCode": r["category"],
+            "materialName": r["category"],
+            "amount": r["amount"],
+            "percentage": (r["amount"]/out_total*100) if out_total>0 else 0
+        } for _, r in out_cat.iterrows()]
 
         # 3. Top Materials (IN)
         if not df_inbound.empty:
@@ -252,21 +419,21 @@ async def upload_file(file: UploadFile = File(...)):
         dept_map = {}
         if not df_inbound.empty:
             for _, r in df_inbound.iterrows():
-                d = r['department']
+                d = str(r['department']).strip() if pd.notna(r['department']) else ""
+                if not d or d.lower() == 'nan': continue
                 if d not in dept_map: dept_map[d] = {"in": 0, "out": 0}
-                dept_map[d]["in"] += r['amount']
+                dept_map[d]["in"] += float(r['amount']) if pd.notna(r['amount']) else 0
         if not df_outbound.empty:
             for _, r in df_outbound.iterrows():
-                d = r['department']
+                d = str(r['department']).strip() if pd.notna(r['department']) else ""
+                if not d or d.lower() == 'nan': continue
                 if d not in dept_map: dept_map[d] = {"in": 0, "out": 0}
-                dept_map[d]["out"] += r['amount']
+                dept_map[d]["out"] += float(r['amount']) if pd.notna(r['amount']) else 0
         
         dept_analysis = [{"department": k, "inAmount": v["in"], "outAmount": v["out"], "difference": v["in"]-v["out"]} for k, v in dept_map.items()]
 
         # Combine inventory data to send back to frontend store
         all_inventory = inbound + outbound
-
-        df_all = pd.DataFrame(all_inventory)
 
         # Turnover Rate
         top_turnover = []
@@ -289,50 +456,71 @@ async def upload_file(file: UploadFile = File(...)):
             
             top_turnover = [{"materialCode": r["materialCode"], "materialName": r["materialName"], "turnoverRate": r["turnoverRate"], "monthlyOutQty": r["monthlyOutQty"], "avgStock": r["avgStock"]} for _, r in top_t.iterrows()]
             bottom_turnover = [{"materialCode": r["materialCode"], "materialName": r["materialName"], "turnoverRate": r["turnoverRate"], "monthlyOutQty": r["monthlyOutQty"], "avgStock": r["avgStock"]} for _, r in bot_t.iterrows()]
-            
-        # Department Composition
-        if not df_all.empty:
-            dept_cat = df_all.groupby("department")["amount"].sum().reset_index()
-            dept_total = dept_cat["amount"].sum()
-            dept_composition = [{"materialName": r["department"], "amount": r["amount"], "percentage": (r["amount"]/dept_total*100) if dept_total>0 else 0} for _, r in dept_cat.iterrows()]
-        else:
-            dept_composition = []
 
-        # Project Composition
-        if not df_all.empty:
-            proj_cat = df_all.groupby("project")["amount"].sum().reset_index()
-            proj_total = proj_cat["amount"].sum()
-            proj_composition = [{"materialName": r["project"], "amount": r["amount"], "percentage": (r["amount"]/proj_total*100) if proj_total>0 else 0} for _, r in proj_cat.iterrows()]
-        else:
-            proj_composition = []
-
-        # Project Analysis
+        # Project Analysis Map
         proj_map = {}
         if not df_inbound.empty:
             for _, r in df_inbound.iterrows():
-                p = r['project']
+                p = str(r['project']).strip() if pd.notna(r['project']) else ""
+                if not p or p.lower() == 'nan': continue
                 if p not in proj_map: proj_map[p] = {"in": 0, "out": 0}
-                proj_map[p]["in"] += r['amount']
+                proj_map[p]["in"] += float(r['amount']) if pd.notna(r['amount']) else 0
         if not df_outbound.empty:
             for _, r in df_outbound.iterrows():
-                p = r['project']
+                p = str(r['project']).strip() if pd.notna(r['project']) else ""
+                if not p or p.lower() == 'nan': continue
                 if p not in proj_map: proj_map[p] = {"in": 0, "out": 0}
-                proj_map[p]["out"] += r['amount']
-        
+                proj_map[p]["out"] += float(r['amount']) if pd.notna(r['amount']) else 0
+
+        # Department Composition: strictly grouped from inbound purchase sheet
+        if not df_inbound.empty:
+            dept_source = df_inbound.copy()
+            dept_source["department"] = dept_source["department"].apply(lambda value: safe_text(value))
+            dept_source = dept_source[dept_source["department"] != ""]
+            dept_cat = dept_source.groupby("department", sort=False)["amount"].sum().reset_index() if not dept_source.empty else pd.DataFrame(columns=["department", "amount"])
+            dept_total = dept_cat["amount"].sum()
+            dept_composition = [{
+                "materialCode": r["department"],
+                "materialName": r["department"],
+                "amount": round(float(r["amount"]), 2),
+                "percentage": round((float(r["amount"]) / dept_total * 100), 2) if dept_total > 0 else 0
+            } for _, r in dept_cat.iterrows()]
+        else:
+            dept_composition = []
+
+        # Project Composition: strictly grouped from inbound purchase sheet
+        if not df_inbound.empty:
+            proj_source = df_inbound.copy()
+            proj_source["project"] = proj_source["project"].apply(lambda value: safe_text(value))
+            proj_source = proj_source[proj_source["project"] != ""]
+            proj_cat = proj_source.groupby("project", sort=False)["amount"].sum().reset_index() if not proj_source.empty else pd.DataFrame(columns=["project", "amount"])
+            if not proj_cat.empty:
+                proj_cat = proj_cat.sort_values(by="project", key=lambda col: col.map(natural_label_sort_key)).reset_index(drop=True)
+            proj_total = proj_cat["amount"].sum()
+            proj_composition = [{
+                "materialCode": r["project"],
+                "materialName": r["project"],
+                "amount": round(float(r["amount"]), 2),
+                "percentage": round((float(r["amount"]) / proj_total * 100), 2) if proj_total > 0 else 0
+            } for _, r in proj_cat.iterrows()]
+        else:
+            proj_composition = []
+
+        # Project Analysis List
         proj_analysis = []
         for k, v in proj_map.items():
             status = "normal"
             if v["out"] > v["in"]: status = "overbudget"
             elif v["in"] > v["out"] * 1.5 and v["out"] > 0: status = "waste"
-            proj_analysis.append({"project": k, "purchaseAmount": v["in"], "usedAmount": v["out"], "status": status})
+            proj_analysis.append({"project": k, "purchaseAmount": round(v["in"], 2), "usedAmount": round(v["out"], 2), "status": status})
 
         base_demand_map = {}
         if not df_stock.empty:
-            code_col = next((c for c in df_stock.columns if '编码' in c or 'code' in c.lower()), None)
-            base_col = next((c for c in df_stock.columns if '基础需求' in c), None)
+            code_col = choose_best_column(df_stock, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
+            base_col = choose_best_column(df_stock, ['基础需求数量', '基础需求'], ['基础需求'], lambda text: safe_number(text) != 0)
             if code_col and base_col:
                 for _, r in df_stock.iterrows():
-                    code = str(r.get(code_col)).strip()
+                    code = safe_text(r.get(code_col)).strip()
                     base = safe_number(r.get(base_col))
                     if base > 0:
                         base_demand_map[code] = base
@@ -432,7 +620,7 @@ async def upload_file(file: UploadFile = File(...)):
 
         return {
             "inventoryData": all_inventory,
-            "stockData": [], # Simplified for now, unless we parse stock_sheet fully
+            "stockData": stock_data,
             "analyticsResult": {
                 "trendData": trend_data,
                 "inboundComposition": inbound_composition,

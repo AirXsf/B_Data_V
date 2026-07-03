@@ -17,6 +17,8 @@ const safeNumber = (value: unknown): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const normalizeHeader = (value: unknown): string => safeString(value).replace(/\s+/g, '');
+
 const parseDate = (value: unknown): string => {
   if (value === null || value === undefined || value === '') {
     const now = new Date();
@@ -32,6 +34,13 @@ const parseDate = (value: unknown): string => {
     }
   }
   const str = String(value).trim();
+  if (/^\d{5,}$/.test(str)) {
+    const year = str.slice(0, 4);
+    const month = Number(str.slice(4));
+    if (month >= 1 && month <= 12) {
+      return `${year}-${String(month).padStart(2, '0')}-01`;
+    }
+  }
   if (str.includes('/')) {
     const parts = str.split('/');
     if (parts.length >= 3) {
@@ -45,8 +54,12 @@ const parseDate = (value: unknown): string => {
 };
 
 const findColumnIndex = (headers: string[], ...candidates: string[]): number => {
+  const normalizedHeaders = headers.map((h) => normalizeHeader(h));
   for (const candidate of candidates) {
-    const idx = headers.findIndex((h) => safeString(h).includes(candidate));
+    const normalizedCandidate = normalizeHeader(candidate);
+    let idx = normalizedHeaders.findIndex((h) => h === normalizedCandidate);
+    if (idx !== -1) return idx;
+    idx = normalizedHeaders.findIndex((h) => h.includes(normalizedCandidate));
     if (idx !== -1) return idx;
   }
   return -1;
@@ -93,9 +106,8 @@ export const parseExcelFile = async (file: File): Promise<ParsedExcelResult> => 
         for (const row of dataRows) {
           if (!row || row.every((cell) => !cell)) continue;
           const qty = safeNumber(quantityIdx >= 0 ? row[quantityIdx] : 0);
-          if (qty <= 0) continue;
-
           const amt = safeNumber(amountIdx >= 0 ? row[amountIdx] : 0);
+          if (qty === 0 && amt === 0) continue;
           const materialCode = safeString(materialCodeIdx >= 0 ? row[materialCodeIdx] : '');
           if (!materialCode) continue;
 
@@ -104,10 +116,10 @@ export const parseExcelFile = async (file: File): Promise<ParsedExcelResult> => 
             materialCode,
             materialName: safeString(materialNameIdx >= 0 ? row[materialNameIdx] : materialCode),
             category: safeString(categoryIdx >= 0 ? row[categoryIdx] : '采购入库'),
-            department: safeString(departmentIdx >= 0 ? row[departmentIdx] : '待分配'),
-            project: safeString(projectIdx >= 0 ? row[projectIdx] : '待分配'),
+            department: safeString(departmentIdx >= 0 ? row[departmentIdx] : ''),
+            project: safeString(projectIdx >= 0 ? row[projectIdx] : ''),
             quantity: qty,
-            amount: amt > 0 ? amt : qty * 100,
+            amount: amt,
             date: parseDate(dateIdx >= 0 ? row[dateIdx] : new Date()),
             type: 'in',
             baseStock: safeNumber(baseStockIdx >= 0 ? row[baseStockIdx] : 0),
@@ -143,9 +155,8 @@ export const parseExcelFile = async (file: File): Promise<ParsedExcelResult> => 
         for (const row of dataRows) {
           if (!row || row.every((cell) => !cell)) continue;
           const qty = safeNumber(quantityIdx >= 0 ? row[quantityIdx] : 0);
-          if (qty <= 0) continue;
-
           const amt = safeNumber(amountIdx >= 0 ? row[amountIdx] : 0);
+          if (qty === 0 && amt === 0) continue;
           const materialCode = safeString(materialCodeIdx >= 0 ? row[materialCodeIdx] : '');
           if (!materialCode) continue;
 
@@ -154,10 +165,10 @@ export const parseExcelFile = async (file: File): Promise<ParsedExcelResult> => 
             materialCode,
             materialName: safeString(materialNameIdx >= 0 ? row[materialNameIdx] : materialCode),
             category: safeString(categoryIdx >= 0 ? row[categoryIdx] : '生产领用'),
-            department: safeString(departmentIdx >= 0 ? row[departmentIdx] : '待分配'),
-            project: safeString(projectIdx >= 0 ? row[projectIdx] : '待分配'),
+            department: safeString(departmentIdx >= 0 ? row[departmentIdx] : ''),
+            project: safeString(projectIdx >= 0 ? row[projectIdx] : ''),
             quantity: qty,
-            amount: amt > 0 ? amt : qty * 100,
+            amount: amt,
             date: parseDate(dateIdx >= 0 ? row[dateIdx] : new Date()),
             type: 'out',
             baseStock: 0,

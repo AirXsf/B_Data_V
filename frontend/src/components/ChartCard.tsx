@@ -107,15 +107,15 @@ export const ChartCard = ({ title, type, data, colorScheme }: ChartCardProps) =>
   };
 
   const barData = {
-    labels: type === 'bar' && 'materialCode' in (data[0] as MaterialRanking)
-      ? (data as MaterialRanking[]).map((d) => d.materialCode)
-      : (data as CategoryComposition[]).map((d) => d.materialCode),
+    labels: 'rank' in (data[0] as MaterialRanking)
+      ? (data as MaterialRanking[]).map((d) => d.materialCode || d.materialName)
+      : (data as CategoryComposition[]).map((d) => d.materialName || d.materialCode),
     datasets: [
       {
-        label: type === 'bar' && 'amount' in (data[0] as MaterialRanking)
+        label: 'rank' in (data[0] as MaterialRanking)
           ? '采购金额'
           : '金额',
-        data: type === 'bar' && 'amount' in (data[0] as MaterialRanking)
+        data: 'rank' in (data[0] as MaterialRanking)
           ? (data as MaterialRanking[]).map((d) => d.amount)
           : (data as CategoryComposition[]).map((d) => d.amount),
         backgroundColor: colors.slice(0, data.length),
@@ -187,6 +187,16 @@ export const ChartCard = ({ title, type, data, colorScheme }: ChartCardProps) =>
       }
     },
     scales: type !== 'doughnut' ? {
+      x: type === 'bar' ? {
+        ticks: {
+          autoSkip: false,
+          maxRotation: 45,
+          minRotation: 45,
+          font: {
+            size: 10,
+          },
+        },
+      } : undefined,
       y: {
         beginAtZero: true,
         ticks: {
