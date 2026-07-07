@@ -611,47 +611,44 @@ async def upload_file(file: UploadFile = File(...)):
 
         warnings = []
         
-        # 呆滞库存预警 & 低库存预警
-        if not df_inbound.empty and not df_outbound.empty:
-            df_inbound['date_dt'] = pd.to_datetime(df_inbound['date'], errors='coerce')
-            df_outbound['date_dt'] = pd.to_datetime(df_outbound['date'], errors='coerce')
-            
-            # Group by material
-            last_out = df_outbound.groupby(["materialCode", "materialName"])['date_dt'].max().reset_index()
-            total_in = df_inbound.groupby(["materialCode", "materialName"])['quantity'].sum().reset_index()
-            total_out = df_outbound.groupby(["materialCode", "materialName"])['quantity'].sum().reset_index()
-            
-            stock_status = pd.merge(total_in, total_out, on=["materialCode", "materialName"], how="outer", suffixes=('_in', '_out')).fillna(0)
-            stock_status['currentStock'] = stock_status['quantity_in'] - stock_status['quantity_out']
-            stock_status = pd.merge(stock_status, last_out, on=["materialCode", "materialName"], how="left")
-            
-            now = pd.to_datetime('2025-06-01') # Use a fixed date for demo or datetime.now()
-            
-            for i, r in stock_status.iterrows():
-                mat_code = r['materialCode']
-                mat_name = r['materialName']
-                current_stock = r['currentStock']
-                last_out_date = r['date_dt']
+        # 积压库存预警 (基于周转天数)
+        if 'turnover_list' in locals() and turnover_list:
+            for i, item in enumerate(turnover_list):
+                mat_code = item["materialCode"]
+                mat_name = item["materialName"]
+                current_stock = item.get("currentStock", item.get("avgStock", 0))
+                turnover_days = item["turnoverDays"]
                 
-                # 呆滞预警
-                if pd.notnull(last_out_date) and current_stock > 0:
-                    months_idle = (now.year - last_out_date.year) * 12 + now.month - last_out_date.month
-                    if months_idle > 6:
+                if turnover_days == "呆滞":
+                    if current_stock > 0:
                         warnings.append({
-                            "id": f"w-{i}-stale-6", "type": "stale", "level": "danger",
+                            "id": f"w-{i}-stale-inf", "type": "stale", "level": "danger",
                             "materialCode": mat_code, "materialName": mat_name,
-                            "message": f"严重呆滞: 超过 {months_idle} 个月未出库",
-                            "currentStock": current_stock, "threshold": 6, "baselineDemand": 0,
-                            "monthsSinceLastTransaction": months_idle,
+                            "message": f"严重呆滞: 无任何出库记录",
+                            "currentStock": current_stock, "threshold": 180, "baselineDemand": 0,
+                            "monthsSinceLastTransaction": "呆滞",
+                            "turnoverDays": "呆滞",
                             "suggestion": "建议立即评估折价处理或报废"
                         })
-                    elif months_idle > 3:
+                elif isinstance(turnover_days, (int, float)):
+                    if turnover_days > 180 and current_stock > 0:
                         warnings.append({
-                            "id": f"w-{i}-stale-3", "type": "stale", "level": "warning",
+                            "id": f"w-{i}-stale-180", "type": "stale", "level": "danger",
                             "materialCode": mat_code, "materialName": mat_name,
-                            "message": f"呆滞风险: 超过 {months_idle} 个月未出库",
-                            "currentStock": current_stock, "threshold": 3, "baselineDemand": 0,
-                            "monthsSinceLastTransaction": months_idle,
+                            "message": f"严重积压: 周转天数达 {turnover_days} 天",
+                            "currentStock": current_stock, "threshold": 180, "baselineDemand": 0,
+                            "monthsSinceLastTransaction": turnover_days,
+                            "turnoverDays": turnover_days,
+                            "suggestion": "建议立即评估折价处理或报废"
+                        })
+                    elif turnover_days > 90 and current_stock > 0:
+                        warnings.append({
+                            "id": f"w-{i}-stale-90", "type": "stale", "level": "warning",
+                            "materialCode": mat_code, "materialName": mat_name,
+                            "message": f"积压风险: 周转天数达 {turnover_days} 天",
+                            "currentStock": current_stock, "threshold": 90, "baselineDemand": 0,
+                            "monthsSinceLastTransaction": turnover_days,
+                            "turnoverDays": turnover_days,
                             "suggestion": "建议优先跨部门调拨"
                         })
                 

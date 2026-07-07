@@ -64,7 +64,7 @@ export const Warnings = () => {
               <p className={`text-3xl font-bold ${staleItems.length > 0 ? 'text-yellow-600' : 'text-gray-600'}`}>
                 {staleItems.length}
               </p>
-              <p className="text-xs text-gray-500 mt-1">库存积压天数超过阈值</p>
+              <p className="text-xs text-gray-500 mt-1">周转天数超过阈值</p>
             </div>
           </div>
         </div>
@@ -83,22 +83,22 @@ export const Warnings = () => {
         </div>
       </div>
 
-      {/* 1. 积压库存预警 - 超过3个月标黄 / 超过6个月标红 */}
+      {/* 1. 积压库存预警 - 超过90天标黄 / 超过180天或呆滞标红 */}
       <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-yellow-500" />
-              <h3 className="text-lg font-semibold text-gray-800">一、积压库存预警（积压天数＞3个月标黄，＞6个月标红）</h3>
+              <h3 className="text-lg font-semibold text-gray-800">一、积压库存预警（周转天数＞90天标黄，＞180天或呆滞标红）</h3>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 bg-yellow-400 rounded-full"></span>
-                <span className="text-gray-600">＞3个月</span>
+                <span className="text-gray-600">＞90天</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                <span className="text-gray-600">＞6个月</span>
+                <span className="text-gray-600">＞180天 / 呆滞</span>
               </div>
             </div>
           </div>
@@ -114,8 +114,9 @@ export const Warnings = () => {
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料编码</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料名称</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">当前库存</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">积压天数</th>
+                <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">周转天数</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">建议措施</th>
+                <th className="py-3 px-4 text-center text-sm font-medium text-gray-600">预警状态</th>
               </tr>
             </thead>
             <tbody>
@@ -133,14 +134,23 @@ export const Warnings = () => {
                       {Math.round(item.currentStock || 0).toLocaleString()}
                     </td>
                     <td className="py-3 px-4 text-sm text-right text-gray-700 font-medium">
-                      {Math.round(item.monthsSinceLastTransaction || 0) * 30}天
+                      {item.turnoverDays === '呆滞' ? '呆滞' : (item.turnoverDays ? item.turnoverDays + '天' : '-')}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{item.suggestion}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                        item.level === 'danger' 
+                          ? 'bg-red-100 text-red-800 border-red-200' 
+                          : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      }`}>
+                        {item.level === 'danger' ? '红色预警' : '黄色预警'}
+                      </span>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-8 px-4 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="py-8 px-4 text-center text-sm text-gray-500">
                     暂无积压库存预警
                   </td>
                 </tr>

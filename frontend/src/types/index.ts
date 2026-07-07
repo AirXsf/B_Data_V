@@ -55,7 +55,8 @@ export interface WarningItem {
   currentStock: number;
   threshold: number;
   baselineDemand: number;
-  monthsSinceLastTransaction: number;
+  monthsSinceLastTransaction: number | string;
+  turnoverDays?: number | string;
   suggestion: string;
 }
 
