@@ -85,8 +85,8 @@ export const Analysis = () => {
   const totalOut = inventoryData.filter((d) => d.type === 'out').reduce((s, d) => s + d.amount, 0);
   const materialCount = new Set(inventoryData.map((item) => item.materialCode)).size;
   const lowStockCount = analyticsResult?.warnings.filter((w) => w.type === 'low_stock').length || 0;
-  const staleCount = analyticsResult?.warnings.filter((w) => w.type === 'stale').length || 0;
-  const warningCount = (analyticsResult?.warnings.length || 0);
+  const staleCount = analyticsResult?.warnings.filter((w) => w.type === 'stale' && (w.level === 'danger' || w.level === 'warning')).length || 0;
+  const warningCount = lowStockCount + staleCount;
 
   const handleGenerate = async () => {
     setIsGenerating(true);
