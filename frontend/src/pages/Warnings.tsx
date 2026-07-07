@@ -38,72 +38,70 @@ export const Warnings = () => {
       </div>
 
       {/* 预警总览 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className={`rounded-xl p-6 shadow-sm border-2 ${lowStockItems.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${lowStockItems.length > 0 ? 'bg-red-200' : 'bg-gray-200'}`}>
-              <AlertTriangle className={`w-7 h-7 ${lowStockItems.length > 0 ? 'text-red-600' : 'text-gray-600'}`} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">低库存预警项</p>
-              <p className={`text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                {lowStockItems.length}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">结存数量低于基础需求数量</p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-red-50 rounded-xl p-6 border border-red-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-6 h-6 text-red-600" />
+          </div>
+          <div>
+            <p className="text-sm text-red-800 font-medium">低库存预警项</p>
+            <p className="text-3xl font-bold text-red-600">{lowStockItems.length}</p>
+            <p className="text-xs text-red-600/70 mt-1">结存数量低于基础需求数量</p>
           </div>
         </div>
 
-        <div className={`rounded-xl p-6 shadow-sm border-2 ${staleItems.length > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${staleItems.length > 0 ? 'bg-yellow-200' : 'bg-gray-200'}`}>
-              <Package className={`w-7 h-7 ${staleItems.length > 0 ? 'text-yellow-600' : 'text-gray-600'}`} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">积压库存预警项</p>
-              <p className={`text-3xl font-bold ${staleItems.length > 0 ? 'text-yellow-600' : 'text-gray-600'}`}>
-                {staleItems.length}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">周转天数超过阈值</p>
-            </div>
+        <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <Package className="w-6 h-6 text-yellow-600" />
+          </div>
+          <div>
+            <p className="text-sm text-yellow-800 font-medium">积压预警项 (红/黄)</p>
+            <p className="text-3xl font-bold text-yellow-600">
+              {staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
+            </p>
+            <p className="text-xs text-yellow-600/70 mt-1">周转天数超过90天或呆滞</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-blue-200">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-blue-200 rounded-xl flex items-center justify-center">
-              <AlertOctagon className="w-7 h-7 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">总预警项数</p>
-              <p className="text-3xl font-bold text-blue-600">{analyticsResult?.warnings.length || 0}</p>
-              <p className="text-xs text-gray-500 mt-1">需关注的异常物料</p>
-            </div>
+        <div className="bg-blue-50 rounded-xl p-6 border border-blue-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <AlertOctagon className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm text-blue-800 font-medium">总预警项数</p>
+            <p className="text-3xl font-bold text-blue-600">
+              {lowStockItems.length + staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
+            </p>
+            <p className="text-xs text-blue-600/70 mt-1">需关注的异常物料</p>
           </div>
         </div>
       </div>
 
-      {/* 1. 积压库存预警 - 超过90天标黄 / 超过180天或呆滞标红 */}
+      {/* 1. 积压库存预警 - 超过90天标黄 / 超过180天或呆滞标红 / 正常标绿 */}
       <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-yellow-500" />
-              <h3 className="text-lg font-semibold text-gray-800">一、积压库存预警（周转天数＞90天标黄，＞180天或呆滞标红）</h3>
+              <h3 className="text-lg font-semibold text-gray-800">一、库存周转状态（＞180天或呆滞标红，＞90天标黄，正常标绿）</h3>
             </div>
             <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                <span className="text-gray-600">＞180天 / 呆滞</span>
+              </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 bg-yellow-400 rounded-full"></span>
                 <span className="text-gray-600">＞90天</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                <span className="text-gray-600">＞180天 / 呆滞</span>
+                <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                <span className="text-gray-600">正常</span>
               </div>
             </div>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            共 {staleItems.length} 项积压物料（涉及库存量 {totalAmountStale.toLocaleString()} 件），建议优先清理或调剂使用
+            共 {staleItems.length} 项库存物料参与周转状态评估，请根据预警级别采取相应措施（红黄牌预警：{staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length} 项）
           </p>
         </div>
 
@@ -112,7 +110,6 @@ export const Warnings = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料编码</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料名称</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">当前库存</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">周转天数</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">建议措施</th>
@@ -125,11 +122,10 @@ export const Warnings = () => {
                   <tr
                     key={item.materialCode}
                     className={`border-b border-gray-50 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} ${
-                      item.level === 'danger' ? 'bg-red-50/60' : 'bg-yellow-50/60'
+                      item.level === 'danger' ? 'bg-red-50/60' : item.level === 'warning' ? 'bg-yellow-50/60' : 'bg-green-50/40'
                     }`}
                   >
                     <td className="py-3 px-4 text-sm font-mono font-medium text-gray-800">{item.materialCode}</td>
-                    <td className="py-3 px-4 text-sm text-gray-700">{item.materialName}</td>
                     <td className="py-3 px-4 text-sm text-right text-gray-700 font-medium">
                       {Math.round(item.currentStock || 0).toLocaleString()}
                     </td>
@@ -141,16 +137,18 @@ export const Warnings = () => {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                         item.level === 'danger' 
                           ? 'bg-red-100 text-red-800 border-red-200' 
-                          : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : item.level === 'warning'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : 'bg-green-100 text-green-800 border-green-200'
                       }`}>
-                        {item.level === 'danger' ? '红色预警' : '黄色预警'}
+                        {item.level === 'danger' ? '红色预警' : item.level === 'warning' ? '黄色预警' : '正常流转'}
                       </span>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-8 px-4 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="py-8 px-4 text-center text-sm text-gray-500">
                     暂无积压库存预警
                   </td>
                 </tr>

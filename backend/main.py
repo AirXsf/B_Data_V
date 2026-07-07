@@ -526,7 +526,7 @@ async def upload_file(file: UploadFile = File(...)):
                 top_turnover = [{
                     "materialCode": r["materialCode"],
                     "materialName": r["materialName"],
-                    "turnoverRate": r["turnoverDays"],
+                    "turnoverDays": r["turnoverDays"],
                     "turnoverTimes": r["turnoverTimes"],
                     "monthlyOutQty": r["issueQty"],
                     "avgStock": r["avgStock"]
@@ -535,7 +535,7 @@ async def upload_file(file: UploadFile = File(...)):
                 bottom_turnover = [{
                     "materialCode": r["materialCode"],
                     "materialName": r["materialName"],
-                    "turnoverRate": r["turnoverDays"],
+                    "turnoverDays": r["turnoverDays"],
                     "turnoverTimes": r["turnoverTimes"],
                     "monthlyOutQty": r["issueQty"],
                     "avgStock": r["avgStock"]
@@ -613,7 +613,12 @@ async def upload_file(file: UploadFile = File(...)):
         
         # 积压库存预警 (基于周转天数)
         if 'turnover_list' in locals() and turnover_list:
-            for i, item in enumerate(turnover_list):
+            # Sort the full turnover list by sortVal ascending (same as bottom10 logic: 呆滞 first, then largest days)
+            # Exclude "零库存" (inf)
+            valid_turnover = [x for x in turnover_list if x["sortVal"] != float('inf')]
+            sorted_turnover = sorted(valid_turnover, key=lambda x: x["sortVal"])
+            
+            for i, item in enumerate(sorted_turnover):
                 mat_code = item["materialCode"]
                 mat_name = item["materialName"]
                 current_stock = item.get("currentStock", item.get("avgStock", 0))
@@ -650,6 +655,16 @@ async def upload_file(file: UploadFile = File(...)):
                             "monthsSinceLastTransaction": turnover_days,
                             "turnoverDays": turnover_days,
                             "suggestion": "建议优先跨部门调拨"
+                        })
+                    elif turnover_days > 0 and current_stock > 0:
+                        warnings.append({
+                            "id": f"w-{i}-stale-normal", "type": "stale", "level": "success",
+                            "materialCode": mat_code, "materialName": mat_name,
+                            "message": f"周转正常: 周转天数 {turnover_days} 天",
+                            "currentStock": current_stock, "threshold": 90, "baselineDemand": 0,
+                            "monthsSinceLastTransaction": turnover_days,
+                            "turnoverDays": turnover_days,
+                            "suggestion": "正常流转，保持现有策略"
                         })
                 
         # 低库存预警: strictly compare stock summary balance quantity vs base demand quantity
