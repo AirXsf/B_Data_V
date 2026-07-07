@@ -1,5 +1,26 @@
 import { useInventoryStore } from '@/store/inventoryStore';
 import { AlertTriangle, Package, AlertOctagon, TrendingUp, Calendar } from 'lucide-react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 export const Warnings = () => {
   const { analyticsResult, inventoryData } = useInventoryStore();
@@ -206,29 +227,29 @@ export const Warnings = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="py-3 px-4 text-left font-medium text-gray-600">月份</th>
-                <th className="py-3 px-4 text-right font-medium text-gray-600">预测入库金额</th>
-                <th className="py-3 px-4 text-right font-medium text-gray-600">预测出库金额</th>
-                <th className="py-3 px-4 text-right font-medium text-gray-600">预测结存</th>
+                <th className="py-3 px-4 text-right font-medium text-gray-600">存货库存预测</th>
+                <th className="py-3 px-4 text-right font-medium text-gray-600">在途采购预测</th>
+                <th className="py-3 px-4 text-right font-medium text-gray-600">销售需求预测</th>
                 <th className="py-3 px-4 text-left font-medium text-gray-600">趋势分析</th>
               </tr>
             </thead>
             <tbody>
               {(analyticsResult?.forecastData || []).map((item, index) => {
-                const isIncreasing = (item.forecastOutAmount || 0) > (item.forecastInAmount || 0) * 0.9;
+                const isIncreasing = (item.salesDemand || 0) > (item.inTransitPurchase || 0);
                 return (
                   <tr key={item.month} className={`border-b border-gray-50 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                     <td className="py-3 px-4 font-medium text-gray-800">{item.month}</td>
                     <td className="py-3 px-4 text-right text-blue-700 font-medium">
-                      {Math.round(item.forecastInAmount || 0).toLocaleString()}
+                      {Math.round(item.forecastStock || 0).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-green-700 font-medium">
+                      {Math.round(item.inTransitPurchase || 0).toLocaleString()}
                     </td>
                     <td className="py-3 px-4 text-right text-orange-700 font-medium">
-                      {Math.round(item.forecastOutAmount || 0).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-right text-gray-800 font-medium">
-                      {Math.round((item.forecastInAmount || 0) - (item.forecastOutAmount || 0)).toLocaleString()}
+                      {Math.round(item.salesDemand || 0).toLocaleString()}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
-                      {isIncreasing ? '📈 出库趋势上升，建议适当加大采购' : '📊 需求稳定，维持现有策略'}
+                      {isIncreasing ? '📈 需求旺盛，建议适当加大采购' : '📊 需求稳定，维持现有策略'}
                     </td>
                   </tr>
                 );
@@ -237,48 +258,55 @@ export const Warnings = () => {
           </table>
         </div>
 
-        {/* 预测趋势图 - 用横向进度条模拟可视化 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100">
-            <h4 className="text-sm font-semibold text-gray-800 mb-4">预测入库金额趋势</h4>
-            <div className="space-y-3">
-              {(analyticsResult?.forecastData || []).map((item) => {
-                const maxIn = Math.max(...(analyticsResult?.forecastData || []).map((d) => d.forecastInAmount || 0), 1);
-                const width = ((item.forecastInAmount || 0) / maxIn) * 100;
-                return (
-                  <div key={item.month} className="flex items-center gap-3">
-                    <span className="w-16 text-xs text-gray-600 font-medium">{item.month}</span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-3">
-                      <div className="bg-blue-500 h-3 rounded-full" style={{ width: `${width}%` }}></div>
-                    </div>
-                    <span className="w-24 text-right text-xs text-gray-700 font-medium">
-                      {Math.round(item.forecastInAmount || 0).toLocaleString()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="p-4 bg-gradient-to-br from-orange-50 to-pink-50 rounded-lg border border-orange-100">
-            <h4 className="text-sm font-semibold text-gray-800 mb-4">预测出库金额趋势</h4>
-            <div className="space-y-3">
-              {(analyticsResult?.forecastData || []).map((item) => {
-                const maxOut = Math.max(...(analyticsResult?.forecastData || []).map((d) => d.forecastOutAmount || 0), 1);
-                const width = ((item.forecastOutAmount || 0) / maxOut) * 100;
-                return (
-                  <div key={item.month} className="flex items-center gap-3">
-                    <span className="w-16 text-xs text-gray-600 font-medium">{item.month}</span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-3">
-                      <div className="bg-orange-500 h-3 rounded-full" style={{ width: `${width}%` }}></div>
-                    </div>
-                    <span className="w-24 text-right text-xs text-gray-700 font-medium">
-                      {Math.round(item.forecastOutAmount || 0).toLocaleString()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* 预测趋势图 - 折线图 */}
+        <div className="mb-6 p-4 bg-white rounded-lg border border-gray-100">
+          <div className="h-72">
+            <Line
+              data={{
+                labels: (analyticsResult?.forecastData || []).map(d => d.month),
+                datasets: [
+                  {
+                    label: '存货库存预测',
+                    data: (analyticsResult?.forecastData || []).map(d => d.forecastStock || 0),
+                    borderColor: '#3b82f6',
+                    backgroundColor: '#3b82f6',
+                    tension: 0.4,
+                  },
+                  {
+                    label: '在途采购预测',
+                    data: (analyticsResult?.forecastData || []).map(d => d.inTransitPurchase || 0),
+                    borderColor: '#10b981',
+                    backgroundColor: '#10b981',
+                    tension: 0.4,
+                  },
+                  {
+                    label: '销售需求预测',
+                    data: (analyticsResult?.forecastData || []).map(d => d.salesDemand || 0),
+                    borderColor: '#f97316',
+                    backgroundColor: '#f97316',
+                    tension: 0.4,
+                  }
+                ]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                  },
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                  }
+                }
+              }}
+            />
           </div>
         </div>
 
@@ -291,7 +319,7 @@ export const Warnings = () => {
             基于历史 {inventoryData.length} 条出入库数据及预测趋势分析：
             {analyticsResult?.forecastData && analyticsResult.forecastData.length > 0
               ? analyticsResult.forecastData
-                  .map((f) => `${f.month}预测${Math.round(f.forecastInAmount || 0).toLocaleString()}元`)
+                  .map((f) => `${f.month}销售需求预测${Math.round(f.salesDemand || 0).toLocaleString()}元`)
                   .join('；') + '。'
               : ''}
             建议：
