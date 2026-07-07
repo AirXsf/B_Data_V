@@ -39,7 +39,8 @@ export interface MaterialRanking {
 export interface TurnoverData {
   materialCode: string;
   materialName: string;
-  turnoverRate: number | string;
+  turnoverRate?: number | string;
+  turnoverDays?: number | string;
   turnoverTimes?: number | string;
   monthlyOutQty: number;
   avgStock: number;

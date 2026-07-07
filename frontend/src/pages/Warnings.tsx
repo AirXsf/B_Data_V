@@ -38,41 +38,49 @@ export const Warnings = () => {
       </div>
 
       {/* 预警总览 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-red-50 rounded-xl p-6 border border-red-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-6 h-6 text-red-600" />
-          </div>
-          <div>
-            <p className="text-sm text-red-800 font-medium">低库存预警项</p>
-            <p className="text-3xl font-bold text-red-600">{lowStockItems.length}</p>
-            <p className="text-xs text-red-600/70 mt-1">结存数量低于基础需求数量</p>
-          </div>
-        </div>
-
-        <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Package className="w-6 h-6 text-yellow-600" />
-          </div>
-          <div>
-            <p className="text-sm text-yellow-800 font-medium">积压预警项 (红/黄)</p>
-            <p className="text-3xl font-bold text-yellow-600">
-              {staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
-            </p>
-            <p className="text-xs text-yellow-600/70 mt-1">周转天数超过90天或呆滞</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className={`rounded-xl p-6 shadow-sm border-2 ${lowStockItems.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${lowStockItems.length > 0 ? 'bg-red-200' : 'bg-gray-200'}`}>
+              <AlertTriangle className={`w-7 h-7 ${lowStockItems.length > 0 ? 'text-red-600' : 'text-gray-600'}`} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">低库存预警项</p>
+              <p className={`text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                {lowStockItems.length}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">结存数量低于基础需求数量</p>
+            </div>
           </div>
         </div>
 
-        <div className="bg-blue-50 rounded-xl p-6 border border-blue-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <AlertOctagon className="w-6 h-6 text-blue-600" />
+        <div className={`rounded-xl p-6 shadow-sm border-2 ${staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length > 0 ? 'bg-yellow-200' : 'bg-gray-200'}`}>
+              <Package className={`w-7 h-7 ${staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length > 0 ? 'text-yellow-600' : 'text-gray-600'}`} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">积压库存预警项</p>
+              <p className={`text-3xl font-bold ${staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length > 0 ? 'text-yellow-600' : 'text-gray-600'}`}>
+                {staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">周转天数超过阈值</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-blue-800 font-medium">总预警项数</p>
-            <p className="text-3xl font-bold text-blue-600">
-              {lowStockItems.length + staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
-            </p>
-            <p className="text-xs text-blue-600/70 mt-1">需关注的异常物料</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-blue-200">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-blue-200 rounded-xl flex items-center justify-center">
+              <AlertOctagon className="w-7 h-7 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">总预警项数</p>
+              <p className="text-3xl font-bold text-blue-600">
+                {lowStockItems.length + staleItems.filter(item => item.level === 'danger' || item.level === 'warning').length}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">需关注的异常物料</p>
+            </div>
           </div>
         </div>
       </div>

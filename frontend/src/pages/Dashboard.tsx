@@ -177,33 +177,37 @@ export const Dashboard = () => {
                     </div>
                   </div>
                   <span className="text-lg font-bold text-green-700 flex-shrink-0">
-                    {typeof item.turnoverRate === 'number' ? item.turnoverRate.toFixed(1) : item.turnoverRate}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-              周转天数 Bottom10（需关注）
-            </h4>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {(analyticsResult?.bottomTurnover || []).map((item, idx) => (
-                <div key={item.materialCode} className="flex items-center gap-3 p-2 bg-red-50 rounded-lg">
-                  <span className="w-7 h-7 bg-red-200 text-red-800 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-800 text-sm truncate">{item.materialCode}</div>
-                    <div className="text-xs text-gray-500">
-                      发出数量: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()} | 周转次数: {item.turnoverTimes}
-                    </div>
+                      {typeof (item.turnoverDays ?? item.turnoverRate) === 'number' 
+                        ? ((item.turnoverDays ?? item.turnoverRate) as number).toFixed(1) 
+                        : (item.turnoverDays ?? item.turnoverRate)}
+                    </span>
                   </div>
-                  <span className="text-lg font-bold text-red-700 flex-shrink-0">
-                    {typeof item.turnoverRate === 'number' ? item.turnoverRate.toFixed(1) : item.turnoverRate}
-                  </span>
+                ))}
+              </div>
+            </div>
+  
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                周转天数 Bottom10（需关注）
+              </h4>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {(analyticsResult?.bottomTurnover || []).map((item, idx) => (
+                  <div key={item.materialCode} className="flex items-center gap-3 p-2 bg-red-50 rounded-lg">
+                    <span className="w-7 h-7 bg-red-200 text-red-800 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 text-sm truncate">{item.materialCode}</div>
+                      <div className="text-xs text-gray-500">
+                        发出数量: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()} | 周转次数: {item.turnoverTimes}
+                      </div>
+                    </div>
+                    <span className="text-lg font-bold text-red-700 flex-shrink-0">
+                      {typeof (item.turnoverDays ?? item.turnoverRate) === 'number' 
+                        ? ((item.turnoverDays ?? item.turnoverRate) as number).toFixed(1) 
+                        : (item.turnoverDays ?? item.turnoverRate)}
+                    </span>
                 </div>
               ))}
             </div>
