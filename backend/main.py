@@ -51,6 +51,13 @@ def natural_label_sort_key(text):
         return (value[:match.start()], int(match.group(1)))
     return (value, float('inf'))
 
+def find_exact_column(columns, aliases):
+    normalized_aliases = {normalize_header(alias) for alias in aliases}
+    for column in columns:
+        if normalize_header(column) in normalized_aliases:
+            return column
+    return None
+
 def unique_headers(values):
     counts = {}
     headers = []
@@ -347,7 +354,7 @@ async def upload_file(file: UploadFile = File(...)):
                     initial_balance = 0
 
             stock_code_col = choose_best_column(df_stock, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
-            stock_name_col = choose_best_column(df_stock, ['存货名称', '物料名称', '材料名称'], ['material'], looks_like_material_name)
+            stock_name_col = find_exact_column(df_stock.columns, ['存货名称', '物料名称', '材料名称'])
             stock_balance_qty_col = choose_best_column(df_stock, ['结存数量', '库存数量', '数量'], ['quantity'], lambda text: safe_number(text) != 0)
             stock_balance_amt_col = choose_best_column(df_stock, ['结存金额', '库存金额', '金额'], ['amount'], lambda text: safe_number(text) != 0)
             stock_base_demand_col = choose_best_column(df_stock, ['基础需求数量', '基础需求'], ['基础需求'], lambda text: safe_number(text) != 0)
@@ -359,7 +366,7 @@ async def upload_file(file: UploadFile = File(...)):
                         continue
                     stock_data.append({
                         "materialCode": code,
-                        "materialName": read_text_field(row, stock_name_col, "", code),
+                        "materialName": read_text_field(row, stock_name_col, code, code),
                         "balanceQuantity": safe_number(row.get(stock_balance_qty_col)) if stock_balance_qty_col else 0,
                         "balanceAmount": safe_number(row.get(stock_balance_amt_col)) if stock_balance_amt_col else 0,
                         "baseDemandQuantity": safe_number(row.get(stock_base_demand_col)) if stock_base_demand_col else 0
@@ -585,23 +592,26 @@ async def upload_file(file: UploadFile = File(...)):
                             "suggestion": "建议优先跨部门调拨"
                         })
                 
-                # 低库存预警 (使用基础需求数量)
-                base_demand = base_demand_map.get(mat_code, 0)
-                
-                # 如果没有配置基础需求量，用历史平均作为 fallback
-                if base_demand == 0:
-                    avg_monthly_out = r['quantity_out'] / max(1, len(months))
-                    base_demand = avg_monthly_out * 1.5
-                
-                if current_stock < base_demand and current_stock >= 0:
-                    warnings.append({
-                        "id": f"w-{i}-low", "type": "low_stock", "level": "warning",
-                        "materialCode": mat_code, "materialName": mat_name,
-                        "message": f"库存不足: 当前库存({current_stock})低于基础需求({round(base_demand,1)})",
-                        "currentStock": current_stock, "threshold": base_demand, "baselineDemand": base_demand,
-                        "monthsSinceLastTransaction": 0,
-                        "suggestion": "建议尽快安排采购补货"
-                    })
+        # 低库存预警: strictly compare stock summary balance quantity vs base demand quantity
+        for i, stock in enumerate(stock_data):
+            base_demand = safe_number(stock.get("baseDemandQuantity"))
+            current_stock = safe_number(stock.get("balanceQuantity"))
+            if base_demand <= 0:
+                continue
+            if current_stock < base_demand:
+                gap = base_demand - current_stock
+                warnings.append({
+                    "id": f"stock-low-{i}", "type": "low_stock",
+                    "level": "danger" if gap > base_demand * 0.5 else "warning",
+                    "materialCode": stock.get("materialCode", ""),
+                    "materialName": stock.get("materialName", stock.get("materialCode", "")),
+                    "message": f"库存不足: 结存数量({round(current_stock, 1)})低于基础需求({round(base_demand, 1)})",
+                    "currentStock": current_stock,
+                    "threshold": base_demand,
+                    "baselineDemand": base_demand,
+                    "monthsSinceLastTransaction": 0,
+                    "suggestion": "建议尽快安排采购补货"
+                })
 
         # Forecast Data
         forecast_data = []

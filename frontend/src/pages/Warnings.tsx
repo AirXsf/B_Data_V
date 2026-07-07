@@ -6,30 +6,8 @@ export const Warnings = () => {
 
   const lowStockItems = analyticsResult?.warnings.filter((w) => w.type === 'low_stock') || [];
   const staleItems = analyticsResult?.warnings.filter((w) => w.type === 'stale') || [];
-  const totalAmountLow = lowStockItems.reduce((s, w) => s + (w.currentStock || 0), 0);
+  const totalAmountLow = lowStockItems.reduce((s, w) => s + Math.max(0, (w.baselineDemand || 0) - (w.currentStock || 0)), 0);
   const totalAmountStale = staleItems.reduce((s, w) => s + (w.currentStock || 0), 0);
-
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case 'danger':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'warning':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getLevelLabel = (level: string) => {
-    switch (level) {
-      case 'danger':
-        return '危险';
-      case 'warning':
-        return '预警';
-      default:
-        return '提示';
-    }
-  };
 
   return (
     <div className="p-6">
@@ -50,7 +28,7 @@ export const Warnings = () => {
               <p className={`text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>
                 {lowStockItems.length}
               </p>
-              <p className="text-xs text-gray-500 mt-1">当前库存低于基础需求数量</p>
+              <p className="text-xs text-gray-500 mt-1">结存数量低于基础需求数量</p>
             </div>
           </div>
         </div>
@@ -117,7 +95,6 @@ export const Warnings = () => {
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">当前库存</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">积压天数</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">建议措施</th>
-                <th className="py-3 px-4 text-center text-sm font-medium text-gray-600">等级</th>
               </tr>
             </thead>
             <tbody>
@@ -138,16 +115,11 @@ export const Warnings = () => {
                       {Math.round(item.monthsSinceLastTransaction || 0) * 30}天
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{item.suggestion}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getLevelColor(item.level)}`}>
-                        {getLevelLabel(item.level)}
-                      </span>
-                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-8 px-4 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="py-8 px-4 text-center text-sm text-gray-500">
                     暂无积压库存预警
                   </td>
                 </tr>
@@ -162,10 +134,10 @@ export const Warnings = () => {
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-500" />
-            <h3 className="text-lg font-semibold text-gray-800">二、低库存预警（当前库存＜基础需求数量）</h3>
+            <h3 className="text-lg font-semibold text-gray-800">二、低库存预警（结存数量＜基础需求数量）</h3>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            共 {lowStockItems.length} 项物料库存低于基础需求（涉及缺口约 {totalAmountLow.toLocaleString()} 件），建议及时补货
+            共 {lowStockItems.length} 项物料结存数量低于基础需求（涉及缺口约 {totalAmountLow.toLocaleString()} 件），建议及时补货
           </p>
         </div>
 
@@ -174,12 +146,10 @@ export const Warnings = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料编码</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">物料名称</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">当前库存</th>
+                <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">结存数量</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">基础需求</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">缺口数量</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">建议措施</th>
-                <th className="py-3 px-4 text-center text-sm font-medium text-gray-600">等级</th>
               </tr>
             </thead>
             <tbody>
@@ -194,26 +164,20 @@ export const Warnings = () => {
                       }`}
                     >
                       <td className="py-3 px-4 text-sm font-mono font-medium text-gray-800">{item.materialCode}</td>
-                      <td className="py-3 px-4 text-sm text-gray-700">{item.materialName}</td>
                       <td className="py-3 px-4 text-sm text-right text-gray-700 font-medium">
                         {Math.round(item.currentStock || 0).toLocaleString()}
                       </td>
                       <td className="py-3 px-4 text-sm text-right text-gray-700 font-medium">
                         {Math.round(item.baselineDemand || 0).toLocaleString()}
                       </td>
-                      <td className="py-3 px-4 text-sm text-right text-red-600 font-medium">-{Math.round(gap).toLocaleString()}</td>
+                      <td className="py-3 px-4 text-sm text-right text-red-600 font-medium">{Math.round(gap).toLocaleString()}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{item.suggestion}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getLevelColor(item.level)}`}>
-                          {getLevelLabel(item.level)}
-                        </span>
-                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-8 px-4 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="py-8 px-4 text-center text-sm text-gray-500">
                     暂无低库存预警
                   </td>
                 </tr>
