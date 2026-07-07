@@ -154,7 +154,7 @@ export const Dashboard = () => {
         <div className="flex items-center gap-2 mb-3">
           <Activity className="w-5 h-5 text-amber-500" />
           <h3 className="text-lg font-semibold text-gray-800">
-            六、库存周转率 Top10 / Bottom10 （周转率 = 月出库量 / 平均库存）
+            六、库存周转天数 Top10 / Bottom10 （周转天数 = 365 / 周转次数）
           </h3>
         </div>
 
@@ -162,7 +162,7 @@ export const Dashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              周转率 TOP10（高效）
+              周转天数 TOP10（高效）
             </h4>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {(analyticsResult?.topTurnover || []).map((item, idx) => (
@@ -173,10 +173,12 @@ export const Dashboard = () => {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm truncate">{item.materialCode}</div>
                     <div className="text-xs text-gray-500">
-                      月出库: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()}
+                      发出数量: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()} | 周转次数: {item.turnoverTimes}
                     </div>
                   </div>
-                  <span className="text-lg font-bold text-green-700 flex-shrink-0">{item.turnoverRate.toFixed(1)}%</span>
+                  <span className="text-lg font-bold text-green-700 flex-shrink-0">
+                    {typeof item.turnoverRate === 'number' ? item.turnoverRate.toFixed(1) : item.turnoverRate}
+                  </span>
                 </div>
               ))}
             </div>
@@ -185,7 +187,7 @@ export const Dashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-              周转率 Bottom10（需关注）
+              周转天数 Bottom10（需关注）
             </h4>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {(analyticsResult?.bottomTurnover || []).map((item, idx) => (
@@ -196,10 +198,12 @@ export const Dashboard = () => {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm truncate">{item.materialCode}</div>
                     <div className="text-xs text-gray-500">
-                      月出库: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()}
+                      发出数量: {Math.round(item.monthlyOutQty).toLocaleString()} | 平均库存: {Math.round(item.avgStock).toLocaleString()} | 周转次数: {item.turnoverTimes}
                     </div>
                   </div>
-                  <span className="text-lg font-bold text-red-700 flex-shrink-0">{item.turnoverRate.toFixed(1)}%</span>
+                  <span className="text-lg font-bold text-red-700 flex-shrink-0">
+                    {typeof item.turnoverRate === 'number' ? item.turnoverRate.toFixed(1) : item.turnoverRate}
+                  </span>
                 </div>
               ))}
             </div>

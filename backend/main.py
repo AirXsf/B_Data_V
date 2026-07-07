@@ -459,24 +459,87 @@ async def upload_file(file: UploadFile = File(...)):
         # Turnover Rate
         top_turnover = []
         bottom_turnover = []
-        if not df_outbound.empty and not df_inbound.empty:
-            out_qty = df_outbound.groupby(["materialCode", "materialName"])["quantity"].sum().reset_index()
-            out_qty.rename(columns={"quantity": "monthlyOutQty"}, inplace=True)
-            
-            in_qty = df_inbound.groupby(["materialCode", "materialName"])["quantity"].sum().reset_index()
-            in_qty.rename(columns={"quantity": "avgStock"}, inplace=True) # Approximate avg stock with inbound for now
-            
-            turnover_df = pd.merge(out_qty, in_qty, on=["materialCode", "materialName"], how="outer").fillna(0)
-            turnover_df["avgStock"] = turnover_df["avgStock"].replace(0, 1) # avoid division by zero
-            turnover_df["turnoverRate"] = (turnover_df["monthlyOutQty"] / turnover_df["avgStock"]) * 100
-            
-            turnover_df = turnover_df.sort_values(by="turnoverRate", ascending=False)
-            
-            top_t = turnover_df.head(10)
-            bot_t = turnover_df.tail(10)
-            
-            top_turnover = [{"materialCode": r["materialCode"], "materialName": r["materialName"], "turnoverRate": r["turnoverRate"], "monthlyOutQty": r["monthlyOutQty"], "avgStock": r["avgStock"]} for _, r in top_t.iterrows()]
-            bottom_turnover = [{"materialCode": r["materialCode"], "materialName": r["materialName"], "turnoverRate": r["turnoverRate"], "monthlyOutQty": r["monthlyOutQty"], "avgStock": r["avgStock"]} for _, r in bot_t.iterrows()]
+        if not df_stock.empty:
+            turnover_list = []
+            init_qty_col = choose_best_column(df_stock, ['期初数量'], ['期初数量'], lambda text: True)
+            bal_qty_col = choose_best_column(df_stock, ['结存数量', '库存数量', '数量'], ['结存数量'], lambda text: True)
+            iss_qty_col = choose_best_column(df_stock, ['发出数量', '出库数量'], ['发出数量'], lambda text: True)
+            code_col = choose_best_column(df_stock, ['存货编码', '物料编码', '材料编码', '编码'], ['code'], looks_like_material_code)
+            name_col = find_exact_column(df_stock.columns, ['存货名称', '物料名称', '材料名称'])
+
+            if init_qty_col and bal_qty_col and iss_qty_col and code_col:
+                for _, r in df_stock.iterrows():
+                    code = safe_text(r.get(code_col))
+                    if not code:
+                        continue
+                    name = read_text_field(r, name_col, code, code)
+                    
+                    init_qty = safe_number(r.get(init_qty_col))
+                    bal_qty = safe_number(r.get(bal_qty_col))
+                    iss_qty = safe_number(r.get(iss_qty_col))
+                    
+                    avg_stock = (init_qty + bal_qty) / 2.0
+                    
+                    if iss_qty == 0:
+                        g_val = "呆滞"
+                    elif avg_stock == 0:
+                        g_val = "零库存"
+                    else:
+                        g_val = iss_qty / avg_stock
+                        
+                    if g_val == "零库存":
+                        h_val = "-"
+                    elif g_val == "呆滞":
+                        h_val = "呆滞"
+                    elif g_val == 0:
+                        h_val = 0
+                    else:
+                        h_val = 365.0 / g_val
+                        
+                    if g_val == "呆滞":
+                        sort_val = -1.0
+                    elif g_val == "零库存":
+                        sort_val = float('inf')
+                    else:
+                        sort_val = float(g_val)
+                        
+                    turnover_list.append({
+                        "materialCode": code,
+                        "materialName": name,
+                        "turnoverTimes": round(g_val, 2) if isinstance(g_val, (int, float)) else g_val,
+                        "turnoverDays": round(h_val, 1) if isinstance(h_val, (int, float)) else h_val,
+                        "issueQty": iss_qty,
+                        "avgStock": avg_stock,
+                        "sortVal": sort_val
+                    })
+                
+                # 过滤掉 "零库存" (无穷大) 和 "呆滞" (-1)，只看有实际周转的，按周转次数降序（即周转天数从小到大）
+                valid_top = [x for x in turnover_list if x["sortVal"] > 0 and x["sortVal"] != float('inf')]
+                sorted_top = sorted(valid_top, key=lambda x: x["sortVal"], reverse=True)
+                top_t = sorted_top[:10]
+                
+                # 包含 "呆滞"，但不包含 "零库存"，按周转次数升序（呆滞排在最前面，因为 sortVal = -1.0）
+                valid_bot = [x for x in turnover_list if x["sortVal"] != float('inf')]
+                sorted_bot = sorted(valid_bot, key=lambda x: x["sortVal"])
+                bot_t = sorted_bot[:10]
+
+                top_turnover = [{
+                    "materialCode": r["materialCode"],
+                    "materialName": r["materialName"],
+                    "turnoverRate": r["turnoverDays"],
+                    "turnoverTimes": r["turnoverTimes"],
+                    "monthlyOutQty": r["issueQty"],
+                    "avgStock": r["avgStock"]
+                } for r in top_t]
+                
+                bottom_turnover = [{
+                    "materialCode": r["materialCode"],
+                    "materialName": r["materialName"],
+                    "turnoverRate": r["turnoverDays"],
+                    "turnoverTimes": r["turnoverTimes"],
+                    "monthlyOutQty": r["issueQty"],
+                    "avgStock": r["avgStock"]
+                } for r in bot_t]
 
         # Project Analysis Map
         proj_map = {}
