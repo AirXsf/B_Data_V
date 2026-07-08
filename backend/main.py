@@ -807,3 +807,24 @@ async def analyze_data(data: dict):
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no" # Disable buffering in Nginx/proxies
     })
+
+# ==========================================
+# 静态资源挂载 (供云托管或单服务部署使用)
+# ==========================================
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# 挂载前端打包好的静态资源
+if os.path.isdir("static"):
+    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+
+    # 处理 React 的前端路由（History 模式）
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        target_path = os.path.join("static", full_path)
+        # 如果是具体的文件（如 favicon.ico 等）则直接返回
+        if os.path.isfile(target_path):
+            return FileResponse(target_path)
+        # 否则兜底返回 index.html 交给 React Router 处理
+        return FileResponse("static/index.html")
