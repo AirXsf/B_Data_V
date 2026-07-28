@@ -1,3 +1,9 @@
+/*
+ * @Date: 2026-06-23 14:40:34
+ * @LastEditors: wangbiao
+ * @Description: 
+ * @LastEditTime: 2026-07-28 17:20:31
+ */
 import { UploadZone } from '@/components/UploadZone';
 import { Database, FileSpreadsheet, Cpu } from 'lucide-react';
 
@@ -47,27 +53,6 @@ export const UploadPage = ({ onComplete }: UploadPageProps) => {
 
         <UploadZone onComplete={onComplete} />
 
-        <div className="mt-12 p-6 bg-white rounded-xl shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-4">支持的数据格式</h3>
-          <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span>物料编码、物料名称、类别</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span>部门、项目、数量、金额</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span>日期、类型（入库/出库）</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span>基础库存数量</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

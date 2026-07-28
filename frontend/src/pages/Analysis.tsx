@@ -156,15 +156,32 @@ export const Analysis = () => {
     });
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!generatedText) return;
-    const blob = new Blob([generatedText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `存货智能分析报告_${new Date().toISOString().split('T')[0]}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    
+    // 动态加载 html2pdf.js
+    if (!(window as any).html2pdf) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    const element = document.getElementById('pdf-report-content');
+    if (!element) return;
+
+    const opt = {
+      margin:       [15, 15, 15, 15],
+      filename:     `存货智能分析报告_${new Date().toISOString().split('T')[0]}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    (window as any).html2pdf().set(opt).from(element).save();
   };
 
   // 🔑 环境变量诊断卡片（始终显示）
@@ -234,7 +251,7 @@ export const Analysis = () => {
                   onClick={handleDownload}
                   className="bg-white/20 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-white/30 transition flex items-center gap-2"
                 >
-                  📥 下载TXT
+                  📥 下载PDF
                 </button>
               </>
             )}
@@ -281,7 +298,7 @@ export const Analysis = () => {
           </p>
         </div>
       ) : generatedText ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div id="pdf-report-content" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {source === 'ai' ? (
